@@ -1,0 +1,557 @@
+<!DOCTYPE HTML>
+<html style="height: 100%;">
+<head>
+    <script type="text/javascript"
+            src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"
+            integrity="sha384-EaUkI/FiMJtEXWAl0dCczvbFvjfzsIF1UNKGJvu9p5JIG71Kih7/kQJvYbBL7HOn"
+            crossorigin="anonymous"></script>
+    <script type="text/javascript" src="//thingspeak.com/highcharts-3.0.8.js"></script>
+    <script src="/assets/application-e3d278fbffad9f8318498567fc6363131ddf569c8567f27de00db057e505e866.js"></script>
+    <script type="text/javascript">
+    // user's timezone offset
+    var myOffset = new Date().getTimezoneOffset();
+
+    // converts date format from JSON
+    function getChartDate(d) {
+      // offset in minutes is converted to milliseconds and subtracted so that chart's x-axis is correct
+      return Date.parse(d) - (myOffset * 60000);
+    }
+
+    $(document).on('page:load ready', function() {
+      // blank array for holding chart data
+      var chartData = [];
+      // variable for the local date in milliseconds
+      var localDate;
+      // variable for the last date added to the chart
+      var last_date;
+      // get the data with a webservice call
+      $.getJSON('https://thingspeak.com/channels/1765206/field/1.json?&amp;offset=0&amp;results=60', function(data) {
+
+          // if no access
+          if (data == '-1') {
+            $('#chart-container').append('This channel is not public.  To embed charts, the channel must be public or a read key must be specified.');
+          }
+
+          // iterate through each feed
+          $.each(data.feeds, function() {
+            var p = new Highcharts.Point();
+            // set the proper values
+            var v = this.field1;
+            p.x = getChartDate(this.created_at);
+            p.y = parseFloat(v);
+            // add location if possible
+            if (this.location) {
+              p.name = this.location;
+            }
+            // if a numerical value exists add it
+            if (!isNaN(parseInt(v))
+                            ) {
+              chartData.push(p);
+            }
+          });
+
+          // specify the chart options
+          var chartOptions = {
+            chart: {
+              renderTo: 'chart-container',
+              defaultSeriesType: "line",
+              backgroundColor: '#ffffff',
+              events: {
+                load: function() {
+                  //if dynamic and no "timeslice" options are set
+                  //   GAK 02/16/2013 Let's try to add the last "average" slice if @chart_attr[:average]
+
+                  var url = 'https://thingspeak.com/channels/1765206/feed/last.json?&amp;offset=0&amp;location=true&amp;results=60';
+                  if ("".length > 0) {
+                    url = 'https://thingspeak.com/channels/1765206/feed/last_average.json?&amp;offset=0&amp;location=true&amp;average=&amp;results=60';
+                  } else if ("".length > 0) {
+                    url = 'https://thingspeak.com/channels/1765206/feed/last_median.json?&amp;offset=0&amp;location=true&amp;median=&amp;results=60';
+                  } else if ("".length > 0) {
+                    url = 'https://thingspeak.com/channels/1765206/feed/last_sum.json?&amp;offset=0&amp;location=true&amp;sum=&amp;results=60';
+                  }
+
+                  if ('true' === 'true' && (''.length < 1)) {
+                    // push data every 15 seconds
+                    setInterval(function() {
+                      // get the data with a webservice call if we're just getting the last channel
+                      $.getJSON(url, function(data) {
+                        // if data exists
+                        if (data && data.field1) {
+
+                          var p = new Highcharts.Point();
+                          // set the proper values
+                          var v = data.field1;
+
+                          p.x = getChartDate(data.created_at);
+                          p.y = parseFloat(v);
+                          // add location if possible
+                          if (data.location) {
+                            p.name = data.location;
+                          }
+                          // get the last date if possible
+                          if (dynamicChart.series[0].data.length > 0) {
+                            last_date = dynamicChart.series[0].data[dynamicChart.series[0].data.length - 1].x;
+                          }
+                          var shift = false; //default for shift
+
+                          //if push is requested in parameters
+                          // then if results is and data.length is < results, shift = false
+                          var results = 60;
+                          if (results && dynamicChart.series[0].data.length + 1 >= results) {
+                            shift = true;
+                          }
+                          // if a numerical value exists and it is a new date, add it
+                          if (!isNaN(parseInt(v)) && (p.x != last_date)
+                                                        ) {
+                            dynamicChart.series[0].addPoint(p, true, shift);
+                          } else {
+                            dynamicChart.series[0].data[dynamicChart.series[0].data.length - 1].update(p);
+                          }
+                        }
+                      });
+
+                    }, 15000);
+                  }
+                }
+              }
+            },
+            title: {
+              text: ''
+            },
+            plotOptions: {
+              line: {
+                color: '#d62020'
+              },
+              bar: {
+                color: '#d62020'
+              },
+              column: {
+                color: '#d62020'
+              },
+              spline: {
+                color: '#d62020'
+              },
+              series: {
+                marker: {
+                  radius: 3
+                },
+                animation: true,
+                step: false,
+                borderWidth: 0,
+                turboThreshold: 0
+              }
+            },
+            tooltip: {
+              // reformat the tooltips so that local times are displayed
+              formatter: function() {
+                var d = new Date(this.x + (myOffset * 60000));
+                var n = (this.point.name === undefined) ? '' : '<br/>' + this.point.name;
+                return this.series.name + ':<b>' + this.y + '</b>' + n + '<br/>' + d.toDateString() + '<br/>' + d.toTimeString().replace(/\(.*\)/, "");
+              }
+            },
+            xAxis: {
+              type: 'datetime',
+              title: {
+                text: 'test'
+              }
+            },
+            yAxis: {
+              title: {
+                text: ''
+              },
+              min: null ,
+              max: null,
+              startOnTick: false,
+              endOnTick: false
+            },
+            legend: {
+              enabled: false
+            },
+            series: [{
+              name: data.channel.field1
+            }],
+            credits: {
+              text: 'ThingSpeak.com',
+              href: 'https://thingspeak.com/',
+              style: {
+                color: '#D62020'
+              }
+            }
+          };
+
+          // add the data to the chart
+          chartOptions.series[0].data = chartData;
+
+          // set chart labels here so that decoding occurs properly
+          chartOptions.title.text = decodeURIComponent('%EC%98%A8%EB%8F%84%ED%98%84%ED%99%A9');
+          chartOptions.xAxis.title.text = 'Date';
+          chartOptions.yAxis.title.text = data.channel.field1;
+
+          // draw the chart
+          var dynamicChart = new Highcharts.Chart(chartOptions);
+
+          // end getJSON success
+        })
+        // chained to getjson, on error
+        .fail(function() {
+          $('#chart-container').html('Invalid Chart options');
+        });
+
+    }); // end document.ready
+
+    </script>
+</head>
+
+<body style="background-color: #ffffff; height: 100%; margin: 0; padding: 0;">
+<div id="chart-container"
+     style="width: 425px; height: 225px; display: block; position:absolute; bottom:0; top:0; left:0; right:0; margin: 5px 15px 15px 0; overflow: hidden;"
+     data-highcharts-chart="0">
+    <div class="highcharts-container"
+         id="highcharts-0"
+         style="position: relative; overflow: hidden; width: 425px; height: 225px; text-align: left; line-height: normal; z-index: 0; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: &quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif; font-size: 12px; touch-action: none;">
+        <svg version="1.1"
+             xmlns="http://www.w3.org/2000/svg"
+             width="425"
+             height="225">
+            <desc>Created with Highcharts 3.0.8</desc>
+            <defs>
+                <clipPath id="highcharts-1">
+                    <rect fill="none" x="0" y="0"
+                          width="354"
+                          height="130">
+                    </rect>
+                </clipPath>
+            </defs>
+            <rect rx="5"
+                  ry="5"
+                  fill="#ffffff"
+                  x="0"
+                  y="0"
+                  width="425"
+                  height="225">
+            </rect>
+            <g class="highcharts-grid"
+               zIndex="1">
+            </g>
+            <g class="highcharts-grid"
+               zIndex="1">
+                <path
+                        fill="none"
+                        d="M 61 46.5 L 415 46.5"
+                        stroke="#C0C0C0"
+                        stroke-width="1"
+                        zIndex="1"
+                        opacity="1">
+                </path>
+                <path fill="none"
+                      d="M 61 105.5 L 415 105.5"
+                      stroke="#C0C0C0"
+                      stroke-width="1"
+                      zIndex="1"
+                      opacity="1">
+                </path>
+                <path fill="none"
+                      d="M 61 164.5 L 415 164.5"
+                      stroke="#C0C0C0"
+                      stroke-width="1"
+                      zIndex="1"
+                      opacity="1">
+                </path>
+            </g>
+            <g class="highcharts-axis" zIndex="2">
+                <path fill="none"
+                      d="M 131.5 170 L 131.5 175"
+                      stroke="#C0D0E0"
+                      stroke-width="1"
+                      opacity="1">
+                </path>
+                <path
+                        fill="none"
+                        d="M 244.5 170 L 244.5 175"
+                        stroke="#C0D0E0"
+                        stroke-width="1"
+                        opacity="1">
+                </path>
+                <path fill="none"
+                      d="M 358.5 170 L 358.5 175"
+                      stroke="#C0D0E0"
+                      stroke-width="1"
+                      opacity="1">
+                </path>
+                <text x="238"
+                      y="203.66666793823242"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:12px;color:#4d759e;font-weight:bold;fill:#4d759e;"
+                      zIndex="7" text-anchor="middle" transform="translate(0,0)"
+                      visibility="visible">
+                    <tspan x="238">Date</tspan>
+                </text>
+                <path fill="none"
+                      d="M 61 170.5 L 415 170.5"
+                      stroke="#C0D0E0"
+                      stroke-width="1"
+                      zIndex="7"
+                      visibility="visible">
+                </path>
+            </g>
+            <g class="highcharts-axis" zIndex="2">
+                <text x="29.083333015441895"
+                      y="105"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:12px;color:#4d759e;font-weight:bold;fill:#4d759e;"
+                      zIndex="7"
+                      text-anchor="middle"
+                      transform="translate(0,0) rotate(270 29.083333015441895 105)"
+                      visibility="visible">
+                    <tspan x="29.083333015441895">Tempature</tspan>
+                </text>
+            </g>
+            <g class="highcharts-series-group"
+               zIndex="3">
+                <g class="highcharts-series"
+                   visibility="visible"
+                   zIndex="0.1"
+                   transform="translate(61,40) scale(1 1)"
+                   clip-path="url(#highcharts-1)">
+                    <path fill="none"
+                          d="M 3.4705882352941178 5.909090909090978 L 3.73116069170143 5.909090909090978 L 3.9759408780234504 5.909090909090978 L 4.212824929302825 5.909090909090978 L 4.497085790838074 5.909090909090978 L 4.73396984211745 5.909090909090978 L 4.994542298524761 5.909090909090978 L 5.263010889974719 5.909090909090978 L 5.515687211339386 5.909090909090978 L 5.7762596677466975 5.909090909090978 L 6.021039854068718 5.909090909090978 L 6.281612310476031 5.909090909090978 L 6.518496361755405 5.909090909090978 L 6.7632765480774255 5.909090909090978 L 7.008056734399446 5.909090909090978 L 7.24494078567882 5.909090909090978 L 7.505513242086133 5.909090909090978 L 7.766085698493445 5.909090909090978 L 8.010865884815466 5.909090909090978 L 8.24774993609484 5.909090909090978 L 8.53201079763009 5.909090909090978 L 8.768894848909465 5.909090909090978 L 9.013675035231485 5.909090909090978 L 9.25055908651086 5.909090909090978 L 9.487443137790233 5.909090909090978 L 9.732223324112255 5.909090909090978 L 10.016484185647505 5.909090909090978 L 10.253368236926878 5.909090909090978 L 10.51394069333419 5.909090909090978 L 10.656071124101816 5.909090909090978 L 10.916643580509128 5.909090909090978 L 350.1109166074457 124.09090909090901 L 350.24515090317067 124.09090909090901 L 350.4030736040236 124.09090909090901 L 350.5294117647059 124.09090909090901"
+                          stroke="#d62020"
+                          stroke-width="2"
+                          zIndex="1"
+                          stroke-linejoin="round"
+                          stroke-linecap="round">
+                    </path>
+                    <path fill="none"
+                          d="M -6.529411764705882 5.909090909090978 L 3.4705882352941178 5.909090909090978 L 3.73116069170143 5.909090909090978 L 3.9759408780234504 5.909090909090978 L 4.212824929302825 5.909090909090978 L 4.497085790838074 5.909090909090978 L 4.73396984211745 5.909090909090978 L 4.994542298524761 5.909090909090978 L 5.263010889974719 5.909090909090978 L 5.515687211339386 5.909090909090978 L 5.7762596677466975 5.909090909090978 L 6.021039854068718 5.909090909090978 L 6.281612310476031 5.909090909090978 L 6.518496361755405 5.909090909090978 L 6.7632765480774255 5.909090909090978 L 7.008056734399446 5.909090909090978 L 7.24494078567882 5.909090909090978 L 7.505513242086133 5.909090909090978 L 7.766085698493445 5.909090909090978 L 8.010865884815466 5.909090909090978 L 8.24774993609484 5.909090909090978 L 8.53201079763009 5.909090909090978 L 8.768894848909465 5.909090909090978 L 9.013675035231485 5.909090909090978 L 9.25055908651086 5.909090909090978 L 9.487443137790233 5.909090909090978 L 9.732223324112255 5.909090909090978 L 10.016484185647505 5.909090909090978 L 10.253368236926878 5.909090909090978 L 10.51394069333419 5.909090909090978 L 10.656071124101816 5.909090909090978 L 10.916643580509128 5.909090909090978 L 350.1109166074457 124.09090909090901 L 350.24515090317067 124.09090909090901 L 350.4030736040236 124.09090909090901 L 350.5294117647059 124.09090909090901 L 360.5294117647059 124.09090909090901"
+                          stroke-linejoin="round"
+                          visibility="visible"
+                          stroke-opacity="0.0001"
+                          stroke="rgb(192,192,192)"
+                          stroke-width="22"
+                          zIndex="2"
+                          class=" highcharts-tracker"
+                          style="">
+                    </path>
+                </g>
+                <g class="highcharts-markers highcharts-tracker"
+                   visibility="visible"
+                   zIndex="0.1"
+                   transform="translate(61,40) scale(1 1)"
+                   clip-path="none"
+                   style="">
+                    <path fill="#d62020"
+                          d="M 10 2.9090909090909776 C 13.996 2.9090909090909776 13.996 8.909090909090978 10 8.909090909090978 C 6.004 8.909090909090978 6.004 2.9090909090909776 10 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 10 2.9090909090909776 C 13.996 2.9090909090909776 13.996 8.909090909090978 10 8.909090909090978 C 6.004 8.909090909090978 6.004 2.9090909090909776 10 2.9090909090909776 Z"
+                          stroke-width="1" visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 10 2.9090909090909776 C 13.996 2.9090909090909776 13.996 8.909090909090978 10 8.909090909090978 C 6.004 8.909090909090978 6.004 2.9090909090909776 10 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 10 2.9090909090909776 C 13.996 2.9090909090909776 13.996 8.909090909090978 10 8.909090909090978 C 6.004 8.909090909090978 6.004 2.9090909090909776 10 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 10 2.9090909090909776 C 13.996 2.9090909090909776 13.996 8.909090909090978 10 8.909090909090978 C 6.004 8.909090909090978 6.004 2.9090909090909776 10 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 9 2.9090909090909776 C 12.996 2.9090909090909776 12.996 8.909090909090978 9 8.909090909090978 C 5.004 8.909090909090978 5.004 2.9090909090909776 9 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path
+                            fill="#d62020"
+                            d="M 9 2.9090909090909776 C 12.996 2.9090909090909776 12.996 8.909090909090978 9 8.909090909090978 C 5.004 8.909090909090978 5.004 2.9090909090909776 9 2.9090909090909776 Z"
+                            stroke-width="1"
+                            visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 9 2.9090909090909776 C 12.996 2.9090909090909776 12.996 8.909090909090978 9 8.909090909090978 C 5.004 8.909090909090978 5.004 2.9090909090909776 9 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 9 2.9090909090909776 C 12.996 2.9090909090909776 12.996 8.909090909090978 9 8.909090909090978 C 5.004 8.909090909090978 5.004 2.9090909090909776 9 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 8 2.9090909090909776 C 11.996 2.9090909090909776 11.996 8.909090909090978 8 8.909090909090978 C 4.004 8.909090909090978 4.004 2.9090909090909776 8 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 8 2.9090909090909776 C 11.996 2.9090909090909776 11.996 8.909090909090978 8 8.909090909090978 C 4.004 8.909090909090978 4.004 2.9090909090909776 8 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 8 2.9090909090909776 C 11.996 2.9090909090909776 11.996 8.909090909090978 8 8.909090909090978 C 4.004 8.909090909090978 4.004 2.9090909090909776 8 2.9090909090909776 Z"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 8 2.9090909090909776 C 11.996 2.9090909090909776 11.996 8.909090909090978 8 8.909090909090978 C 4.004 8.909090909090978 4.004 2.9090909090909776 8 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 7 2.9090909090909776 C 10.996 2.9090909090909776 10.996 8.909090909090978 7 8.909090909090978 C 3.004 8.909090909090978 3.004 2.9090909090909776 7 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 7 2.9090909090909776 C 10.996 2.9090909090909776 10.996 8.909090909090978 7 8.909090909090978 C 3.004 8.909090909090978 3.004 2.9090909090909776 7 2.9090909090909776 Z"
+                          stroke-width="1"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 7 2.9090909090909776 C 10.996 2.9090909090909776 10.996 8.909090909090978 7 8.909090909090978 C 3.004 8.909090909090978 3.004 2.9090909090909776 7 2.9090909090909776 Z"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 7 2.9090909090909776 C 10.996 2.9090909090909776 10.996 8.909090909090978 7 8.909090909090978 C 3.004 8.909090909090978 3.004 2.9090909090909776 7 2.9090909090909776 Z"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 6 2.9090909090909776 C 9.996 2.9090909090909776 9.996 8.909090909090978 6 8.909090909090978 C 2.004 8.909090909090978 2.004 2.9090909090909776 6 2.9090909090909776 Z"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 6 2.9090909090909776 C 9.996 2.9090909090909776 9.996 8.909090909090978 6 8.909090909090978 C 2.004 8.909090909090978 2.004 2.9090909090909776 6 2.9090909090909776 Z"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 6 2.9090909090909776 C 9.996 2.9090909090909776 9.996 8.909090909090978 6 8.909090909090978 C 2.004 8.909090909090978 2.004 2.9090909090909776 6 2.9090909090909776 Z"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 6 2.9090909090909776 C 9.996 2.9090909090909776 9.996 8.909090909090978 6 8.909090909090978 C 2.004 8.909090909090978 2.004 2.9090909090909776 6 2.9090909090909776 Z"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 5 2.9090909090909776 C 8.996 2.9090909090909776 8.996 8.909090909090978 5 8.909090909090978 C 1.004 8.909090909090978 1.004 2.9090909090909776 5 2.9090909090909776 Z"
+                          visibility="inherit">
+                    </path>
+                    <path fill="#d62020"
+                          d="M 5 2.9090909090909776 C 8.996 2.9090909090909776 8.996 8.909090909090978 5 8.909090909090978 C 1.004 8.909090909090978 1.004 2.9090909090909776 5 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 5 2.9090909090909776 C 8.996 2.9090909090909776 8.996 8.909090909090978 5 8.909090909090978 C 1.004 8.909090909090978 1.004 2.9090909090909776 5 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 4 2.9090909090909776 C 7.996 2.9090909090909776 7.996 8.909090909090978 4 8.909090909090978 C 0.0040000000000000036 8.909090909090978 0.0040000000000000036 2.9090909090909776 4 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 4 2.9090909090909776 C 7.996 2.9090909090909776 7.996 8.909090909090978 4 8.909090909090978 C 0.0040000000000000036 8.909090909090978 0.0040000000000000036 2.9090909090909776 4 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 4 2.9090909090909776 C 7.996 2.9090909090909776 7.996 8.909090909090978 4 8.909090909090978 C 0.0040000000000000036 8.909090909090978 0.0040000000000000036 2.9090909090909776 4 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 4 2.9090909090909776 C 7.996 2.9090909090909776 7.996 8.909090909090978 4 8.909090909090978 C 0.0040000000000000036 8.909090909090978 0.0040000000000000036 2.9090909090909776 4 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 3 2.9090909090909776 C 6.996 2.9090909090909776 6.996 8.909090909090978 3 8.909090909090978 C -0.996 8.909090909090978 -0.996 2.9090909090909776 3 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 3 2.9090909090909776 C 6.996 2.9090909090909776 6.996 8.909090909090978 3 8.909090909090978 C -0.996 8.909090909090978 -0.996 2.9090909090909776 3 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 3 2.9090909090909776 C 6.996 2.9090909090909776 6.996 8.909090909090978 3 8.909090909090978 C -0.996 8.909090909090978 -0.996 2.9090909090909776 3 2.9090909090909776 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 350 121.09090909090901 C 353.996 121.09090909090901 353.996 127.09090909090901 350 127.09090909090901 C 346.004 127.09090909090901 346.004 121.09090909090901 350 121.09090909090901 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 350 121.09090909090901 C 353.996 121.09090909090901 353.996 127.09090909090901 350 127.09090909090901 C 346.004 127.09090909090901 346.004 121.09090909090901 350 121.09090909090901 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 350 121.09090909090901 C 353.996 121.09090909090901 353.996 127.09090909090901 350 127.09090909090901 C 346.004 127.09090909090901 346.004 121.09090909090901 350 121.09090909090901 Z"
+                          visibility="inherit"></path>
+                    <path fill="#d62020"
+                          d="M 350 121.09090909090901 C 353.996 121.09090909090901 353.996 127.09090909090901 350 127.09090909090901 C 346.004 127.09090909090901 346.004 121.09090909090901 350 121.09090909090901 Z"
+                          visibility="inherit"></path>
+                </g>
+            </g>
+            <text x="213" y="25"
+                  style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:16px;color:#274b6d;fill:#274b6d;"
+                  text-anchor="middle" class="highcharts-title" zIndex="4">
+                <tspan x="213">온도현황</tspan>
+            </text>
+            <g class="highcharts-axis-labels" zIndex="7">
+                <text x="131.56404769265566" y="184"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:11px;color:#666;cursor:default;line-height:14px;fill:#666;"
+                      text-anchor="middle" opacity="1">
+                    <tspan x="131.56404769265566">04:00</tspan>
+                </text>
+                <text x="245.2683923067555" y="184"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:11px;color:#666;cursor:default;line-height:14px;fill:#666;"
+                      text-anchor="middle" opacity="1">
+                    <tspan x="245.2683923067555">08:00</tspan>
+                </text>
+                <text x="358.9727369208553" y="184"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:11px;color:#666;cursor:default;line-height:14px;fill:#666;"
+                      text-anchor="middle" opacity="1">
+                    <tspan x="358.9727369208553">12:00</tspan>
+                </text>
+            </g>
+            <g class="highcharts-axis-labels" zIndex="7">
+                <text x="53" y="49.57575693997477"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:11px;color:#666;cursor:default;line-height:14px;fill:#666;"
+                      text-anchor="end" opacity="1">
+                    <tspan x="53">25</tspan>
+                </text>
+                <text x="53" y="167.7575751217928"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:11px;color:#666;cursor:default;line-height:14px;fill:#666;"
+                      text-anchor="end" opacity="1">
+                    <tspan x="53">23</tspan>
+                </text>
+                <text x="53" y="108.66666603088379"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:11px;color:#666;cursor:default;line-height:14px;fill:#666;"
+                      text-anchor="end" opacity="1">
+                    <tspan x="53">24</tspan>
+                </text>
+            </g>
+            <g class="highcharts-tooltip" zIndex="8"
+               style="cursor:default;padding:0;white-space:nowrap;" transform="translate(125,53)"
+               opacity="0" visibility="hidden">
+                <rect rx="3" ry="3" fill="none" x="0.5" y="0.5" width="140"
+                      height="66.66666793823242" fill-opacity="0.85" isShadow="true" stroke="black"
+                      stroke-opacity="0.049999999999999996" stroke-width="5"
+                      transform="translate(1, 1)"></rect>
+                <rect rx="3" ry="3" fill="none" x="0.5" y="0.5" width="140"
+                      height="66.66666793823242" fill-opacity="0.85" isShadow="true" stroke="black"
+                      stroke-opacity="0.09999999999999999" stroke-width="3"
+                      transform="translate(1, 1)"></rect>
+                <rect rx="3" ry="3" fill="none" x="0.5" y="0.5" width="140"
+                      height="66.66666793823242" fill-opacity="0.85" isShadow="true" stroke="black"
+                      stroke-opacity="0.15" stroke-width="1" transform="translate(1, 1)"></rect>
+                <rect rx="3" ry="3" fill="rgb(255,255,255)" x="0.5" y="0.5" width="140"
+                      height="66.66666793823242" fill-opacity="0.85" stroke="#d62020"
+                      stroke-width="1" anchorX="152.2873928701489" anchorY="52"></rect>
+                <text x="8" y="21"
+                      style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:12px;color:#333333;fill:#333333;"
+                      zIndex="1">
+                    <tspan x="8">Tempature:</tspan>
+                    <tspan style="font-weight:bold" dx="0">25</tspan>
+                    <tspan x="8" dy="16">Mon Jun 13 2022</tspan>
+                    <tspan x="8" dy="16">01:47:58 GMT+0900</tspan>
+                </text>
+            </g>
+            <text x="415" y="220"
+                  style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Verdana, Arial, Helvetica, sans-serif;font-size:9px;cursor:pointer;color:#D62020;fill:#D62020;"
+                  text-anchor="end" zIndex="8">
+                <tspan x="415">ThingSpeak.com</tspan>
+            </text>
+        </svg>
+    </div>
+</div>
+</body>
+</html>
