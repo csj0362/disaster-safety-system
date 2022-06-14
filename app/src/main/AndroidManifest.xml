@@ -7,6 +7,13 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <application
         android:usesCleartextTraffic="true"
@@ -17,7 +24,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Socket">
         <activity
-            android:name=".main3"
+            android:name=".NetworkActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -25,7 +32,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
+        <activity android:name="com.example.socket.LineChartActivity_te"/>
+        <activity android:name="com.example.socket.MainActivity"/>
+        <activity android:name="com.example.socket.LineChartActivity_hu"/>
+        <activity android:name="com.example.socket.LineChartActivity_vi"/>
     </application>
 
 </manifest>
